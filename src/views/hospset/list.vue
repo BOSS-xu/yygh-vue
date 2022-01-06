@@ -9,12 +9,19 @@
       </el-form-item>
       <el-button type="primary" icon="el-icon-search" @click="getList()">查询</el-button>
     </el-form>
+
+    <!-- 工具条 -->
+    <div>
+      <el-button type="danger" size="mini" @click="removeRows()">批量删除</el-button>
+    </div>
     <!-- banner列表 -->
     <el-table
       :data="list"
       stripe
-      style="width: 100%">
-
+      style="width: 100%"
+      @selection-change="handleSelectionChange"
+    >
+      <el-table-column type="selection" width="55"/>
       <el-table-column type="index" width="50"/>
       <el-table-column prop="hosname" label="医院名称"/>
       <el-table-column prop="hoscode" label="医院编号"/>
@@ -26,14 +33,43 @@
           {{ scope.row.status === 1 ? '可用' : '不可用' }}
         </template>
       </el-table-column>
+      <el-table-column label="操作" width="280" align="center">
+        <template slot-scope="scope">
+          <el-button type="danger" size="mini" icon="el-icon-delete" @click="removeDataById(scope.row.id)">删除
+          </el-button>
+          <el-button
+            v-if="scope.row.status==1"
+            type="primary"
+            size="mini"
+            icon="el-icon-delete"
+            @click="lockHostSet(scope.row.id,0)">锁定
+          </el-button>
+          <el-button
+            v-if="scope.row.status==0"
+            type="danger"
+            size="mini"
+            icon="el-icon-delete"
+            @click="lockHostSet(scope.row.id,1)">取消锁定
+          </el-button>
+          <router-link :to="'/hosp/edit/'+scope.row.id">
+            <el-button type="primary" size="mini" icon="el-icon-edit"/>
+          </router-link>
+        </template>
+      </el-table-column>
     </el-table>
     <!-- 分页 -->
-    <el-pagination :current-page="current" :page-size="limit" :total="total" style="padding: 30px 0; text-align: center;" layout="total, prev, pager, next, jumper" @current-change="getList"/>
+    <el-pagination
+      :current-page="current"
+      :page-size="limit"
+      :total="total"
+      style="padding: 30px 0; text-align: center;"
+      layout="total, prev, pager, next, jumper"
+      @current-change="getList"/>
   </div>
 </template>
 
 <script>
-import hospitalSetApi from '@/api/hospset'
+import hospset from '@/api/hospset'
 
 export default {
   // 定义数据模型
@@ -44,7 +80,8 @@ export default {
       limit: 3,
       searchObj: {},
       list: [],
-      total: 0
+      total: 0,
+      multipleSelection: [] // 批量选择中选择的记录列表
     }
   },
 
@@ -60,7 +97,7 @@ export default {
       console.log('翻页。。。' + page)
       // 异步获取远程数据（ajax）
       this.current = page
-      hospitalSetApi.getPageList(this.current, this.limit, this.searchObj).then(
+      hospset.getPageList(this.current, this.limit, this.searchObj).then(
         response => {
           console.log(response)
           this.list = response.data.records
@@ -69,6 +106,50 @@ export default {
       ).catch(error => {
         console.log(error)
       })
+    },
+    // 删除医院设置的方法
+    removeDataById(id) {
+      this.$confirm('此操作将永久删除医院是设置信息, 是否继续?', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        hospset.deleteHospSet(id).then(response => {
+          this.$message({ type: 'success', message: '删除成功!' })
+          this.getList(this.current)
+        })
+      })
+    },
+    // 当表格复选框选项发生变化的时候触发
+    handleSelectionChange(selection) {
+      this.multipleSelection = selection
+    },
+    // 批量删除
+    removeRows() {
+      this.$confirm('此操作将永久删除医院是设置信息, 是否继续?', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        const idList = []
+        for (let i = 0; i < this.multipleSelection.length; i++) {
+          const obj = this.multipleSelection[i]
+          const id = obj.id
+          idList.push(id)
+        }
+        hospset.removeRows(idList).then(response => {
+          this.$message({ type: 'success', message: '删除成功!' })
+          this.getList(1)
+        })
+      })
+    },
+    // 锁定和取消锁定
+    lockHostSet(id, status) {
+      hospset.lockHospSet(id, status)
+        .then(response => {
+          // 刷新
+          this.getList()
+        })
     }
   }
 }
